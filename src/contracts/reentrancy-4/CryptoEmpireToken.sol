@@ -15,7 +15,9 @@ contract CryptoEmpireToken is ERC1155, Ownable {
         DAGGER
     }
 
-    constructor() ERC1155("someuri") {}
+    constructor(
+        address initialOwner
+    ) ERC1155("someuri") Ownable(initialOwner) {}
 
     function setURI(string memory _newuri) public onlyOwner {
         _setURI(_newuri);

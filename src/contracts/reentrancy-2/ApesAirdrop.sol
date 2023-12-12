@@ -2,16 +2,20 @@
 // https://smartcontractshacking.com/#copyright-policy
 pragma solidity ^0.8.13;
 
-\import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-// import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 /**
  * @title ApesAirdrop
  * @author JohnnyTime (https://smartcontractshacking.com)
  */
 contract ApesAirdrop is ERC721 {
-    using Counters for Counters.Counter;
-    Counters.Counter private _tokenIds;
+    /* 
+    ------------------------------ NOTE that you have swapped out the Counter.sol to a uint256 here @snorbraxen, 
+    ------------------------------ so make sure this is not whats breaking your contract
+
+    Read more here: https://github.com/OpenZeppelin/openzeppelin-contracts/issues/4233
+    */
+    uint256 private _tokenIds;
 
     address public owner;
     uint16 public maxSupply = 50;
@@ -31,7 +35,7 @@ contract ApesAirdrop is ERC721 {
 
     constructor() ERC721("Crazy Apes", "APE") {
         owner = msg.sender;
-        _tokenIds.increment(); // Start with 1
+        _tokenIds++; // Start with 1
     }
 
     function mint() external returns (uint16) {
@@ -40,9 +44,9 @@ contract ApesAirdrop is ERC721 {
         require(!claimed[msg.sender], "already claimed");
 
         // Check tokenId
-        uint16 tokenId = uint16(_tokenIds.current());
+        uint16 tokenId = uint16(_tokenIds);
         require(tokenId <= maxSupply, "Max supply reached!");
-        _tokenIds.increment();
+        _tokenIds++;
 
         // Mint NFT
         _safeMint(msg.sender, tokenId);

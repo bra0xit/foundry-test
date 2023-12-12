@@ -9,8 +9,6 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
  * @author JohnnyTime (https://smartcontractshacking.com)
  */
 contract rToken is ERC20 {
-    // TODO: Complete this contract functionality
-
     address public underlyingToken;
     address public owner;
 
@@ -20,6 +18,7 @@ contract rToken is ERC20 {
         string memory _symbol
     ) ERC20(_name, _symbol) {
         underlyingToken = _underlyingToken;
+        owner = msg.sender;
     }
 
     function burn(address account, uint256 value) public {
