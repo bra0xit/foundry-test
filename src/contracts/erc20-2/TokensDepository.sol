@@ -12,31 +12,48 @@ import {rToken} from "./rToken.sol";
 contract TokensDepository {
     // TODO: Complete this contract functionality
 
-    mapping(address => address) private refToken;
-    mapping(address refToken => uint256) private refTokenSupply;
+    mapping(address => IERC20) public validERC20Tokens;
+    mapping(address => rToken) public receiptTokens;
 
-    address aave = "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9";
-    address uni = "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984";
-    address weth = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
+    address public aaveAddress =
+        address(0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9);
+    address public uniAddress =
+        address(0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984);
+    address public wethAddress =
+        address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+
+    IERC20 public aaveToken;
+    IERC20 public uniToken;
+    IERC20 public wethToken;
 
     rToken public rAave;
     rToken public rUni;
     rToken public rWeth;
 
     constructor() {
-        rAave = rToken(aave, "rAave token", "rAAVE");
-        rUni = rToken(uni, "rUni token", "rUNI");
-        rWeth = rToken(weth, "rWeth token", "rWETH");
+        //Will this make the owner of this TokensDepository contract the owner of the below contracts?
+        // Answer is yes - the depositor (msg.sender) to the TokensDepository contract will become the owner(!) of the underlying reference token,
+        // this since the constructor sets owner = msg.sender --> thus only the depositor can mint and burn tokens
+
+        // Det sättet jag gör det här på --> dvs inte skickar in parametrar genom konstruktorn gör att jag måste vara säker på att jag matchar
+        // med testen som görs (för att kunna hitta de deployade rToken kontrakten)
+        rAave = new rToken(aaveAddress, "rAave token", "rAave");
+        rUni = new rToken(uniAddress, "rUni token", "rUni");
+        rWeth = new rToken(wethAddress, "rWeth token", "rWeth");
+
+        //We also need to store these in a mapping
+        validERC20Tokens[aaveAddress] = IERC20(aaveAddress);
+        validERC20Tokens[uniAddress] = IERC20(uniAddress);
+        validERC20Tokens[wethAddress] = IERC20(wethAddress);
+
+        receiptTokens[aaveAddress] = rAave;
+        receiptTokens[uniAddress] = rUni;
+        receiptTokens[wethAddress] = rWeth;
     }
 
-    //Not necessary with hardcoded vals
-    function addReferenceToken(
-        address _token,
-        address _refToken,
-        uint256 _initSupply
-    ) public {
-        refToken[_token] = _refToken;
-        refTokenSupply[refToken[_token]] = _initSupply;
+    modifier tokenIsValid() {
+        require(true); // token which is valid
+        _;
     }
 
     /*
@@ -44,51 +61,30 @@ contract TokensDepository {
         2. mints rERC20 token from rToken contract to user
         3. transfers rERC20 token from contract to user
         */
-    function deposit(
-        address to,
-        address typeOfTokenDeposited,
-        uint256 amount
-    ) public {
-        if (typeOfTokenDeposited == aave) {
-            aave.transferFrom(msg.sender, to, amount);
-            rAave.mint(to, amount);
-            rAave.transfer(msg.sender, amount);
-        }
+    // Should implement the approver functionality - no?
+    function deposit(address typeOfTokenDeposited, uint256 amount) public {
+        validERC20Tokens[typeOfTokenDeposited].transferFrom(
+            msg.sender,
+            address(this),
+            amount
+        ); //make sure to handle some tokens returning a boolean here
 
-        if (typeOfTokenDeposited == rUni) {
-            uni.transferFrom(msg.sender, to, amount);
-            rUni.mint(to, amount);
-            rUni.transfer(msg.sender, amount);
-        }
-        if (typeOfTokenDeposited == aave) {
-            weth.transferFrom(msg.sender, to, amount);
-            rWeth.mint(to, amount);
-            rWeth.transfer(msg.sender, amount);
-        }
+        /* why is msg.sender eligible to mint here? well because the depositor becomes 
+            the owner of the reference asset, once again since we set msg.sender = owner on the ref contract */
+
+        // #_mint description in ERC20: "Creates a `value` amount of tokens and assigns them to `account`, by transferring it from address(0)."
+        // dvs de skapas OCH skickas till account (msg.sender) i det här fallet, dvs vi behöver inte minta OCH transferra
+        receiptTokens[typeOfTokenDeposited].mint(msg.sender, amount);
     }
 
-    function withdraw(
-        address account,
-        address typeOfTokenWithdrawn,
-        uint256 value
-    ) public {
-        //transfers the rERC20 token from user to contract
-        //burns the rERC20 token from withdrawers account
-        //transfers the ERC20 token from contract to user
-        if (typeOfTokenDeposited == aave) {
-            rAave.transferFrom(msg.sender, to, amount);
-            rAave.burn(to, amount);
-            aave.transfer(msg.sender, amount);
-        }
-        if (typeOfTokenDeposited == rUni) {
-            rUni.transferFrom(msg.sender, to, amount);
-            rUni.burn(to, amount);
-            uni.transfer(msg.sender, amount);
-        }
-        if (typeOfTokenDeposited == aave) {
-            rWeth.transferFrom(msg.sender, to, amount);
-            rWeth.burn(to, amount);
-            weth.transfer(msg.sender, amount);
-        }
+    // transfers the rERC20 token from user to contract
+    // burns the rERC20 token from withdrawers account    (behöver vi verkligen transfera OCH bränna tokens? går det inte att bränna direkt? borde gå)
+    // samma som för #mint så är det här beskrivningen på #burn i ERC20: "Destroys a `value` amount of tokens from `account`, lowering the total supply." dvs
+    // vi behöver inte transferra efter burn, det görs per automatik
+    function withdraw(address typeOfTokenWithdrawn, uint256 value) public {
+        receiptTokens[typeOfTokenWithdrawn].burn(msg.sender, value); // We are not burning the tokens IN the depository --> we are burning them from the msg.senders EOA
+        //is this really needed? maybe actually since this is about the other ERC20 token
+        // being tranferred back (not receipt/reference token)
+        validERC20Tokens[typeOfTokenWithdrawn].transfer(msg.sender, value);
     }
 }
